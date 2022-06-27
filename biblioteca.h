@@ -1,8 +1,47 @@
-void sendInt( int number, int socket );
-void recvInt( int number, int socket );
+/**
+ * @file biblioteca.h
+ *
+ * Este cabeçalho define as funções para manipulação de memória.
+ */
 
-void sendDouble( int double, int socket );
-void recvDouble( int double, int socket );
+/*! Envia valor do tipo Int
+        @param value  Valor inteiro a ser enviado
+        @param socket Socket de destino
+        @return Tamanho da mensagem 
+        */
+void sendInt( int value, int socket );
 
-void sendString( char* string, int socket );
-void recvString( char* string, int socket );
+/*! Recebe valor do tipo Int
+        @param value  Valor int a ser enviado
+        @param socket Socket do cliente
+        @return Tamanho da mensagem 
+        */
+int recvInt( int socket );
+
+/*! Envia valor do tipo Double
+        @param value  Valor double a ser enviado
+        @param socket Socket de destino
+        @return Tamanho da mensagem 
+        */
+void sendDouble( double value, int socket );
+
+/*! Recebe valor do tipo Double
+        @param value  Valor double a ser recebida
+        @param socket Socket do cliente
+        @return Tamanho da mensagem 
+        */
+double recvDouble( int socket );
+
+/*! Envia string
+        @param value  string a ser enviada
+        @param socket Socket de destino
+        @return Tamanho da mensagem 
+        */
+void sendString( char* value, int socket );
+
+/*! Recebe string
+        @param value  string a ser recebida
+        @param socket Socket do cliente
+        @return Tamanho da mensagem 
+        */
+char* recvString( int socket );

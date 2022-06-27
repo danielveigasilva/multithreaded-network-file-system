@@ -8,19 +8,17 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include "biblioteca.h"
 
 int main(int argc, char *argv[])
 {
 
     if( argc != 2 ){ 
-
         printf("USAGE: server port_number\n");
-
         return EXIT_FAILURE;
-
     }
 
-    char* msg[5] = {"Msg1\n", "Msg2\n","Msg3\n","Msg4\n","Msg5\n"};
+    char* msg[5] = {"Homem-Animal\n", "Mulher-Hulk\n", "MiracleMan\n", "V de Vingaça\n", "Watchmen\n"};
 
     srand( time( NULL ));
 
@@ -47,13 +45,12 @@ int main(int argc, char *argv[])
 
     int consocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
 
-    while(consocket)
-    {
+    while(consocket){
         printf("Incoming connection from %s - sending welcome\n", inet_ntoa(dest.sin_addr));
 
-        int randomMessage = rand() % 5;
+        int randomMessage = rand() % 3;
 
-        send(consocket, msg[randomMessage ], strlen(msg[ randomMessage ]) * sizeof( char ), 0);
+        sendString(msg[randomMessage], consocket);
         close(consocket);
         consocket = accept(mysocket, (struct sockaddr *)&dest, &socksize);
     }

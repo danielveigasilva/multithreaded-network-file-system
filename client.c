@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include "biblioteca.h"
 
 #define MAXRCVLEN 500
 
@@ -14,11 +15,8 @@ int main(int argc, char *argv[])
 {
 
 	if( argc != 2 ){ 
-
         printf("USAGE: server port_number\n");
-
         return EXIT_FAILURE;
-
     }
 
    char buffer[MAXRCVLEN + 1]; /* +1 so we can add null terminator */
@@ -36,16 +34,14 @@ int main(int argc, char *argv[])
    int connectResult = connect(mysocket, (struct sockaddr *)&dest, sizeof(struct sockaddr_in));
 
    if( connectResult == - 1 ){
-
    		printf("CLIENT ERROR: %s\n", strerror(errno));
-
    		return EXIT_FAILURE;
    }
 
-   len = recv(mysocket, buffer, MAXRCVLEN, 0);
+   strcpy(buffer,recvString(mysocket));
 
    /* We have to null terminate the received data ourselves */
-   buffer[len] = '\0';
+   //buffer[len] = '\0';
 
    printf("Received %s (%d bytes).\n", buffer, len);
 
