@@ -4,6 +4,12 @@
  * Este cabeçalho define as funções para manipulação de memória.
  */
 
+#define LIST_COMMAND 0
+#define STATUS_COMMAND 1
+#define SEND_FILENAMES_COMMAND 3
+#define true 1
+#define false 0
+
 /*! Envia valor do tipo Int
         @param value  Valor inteiro a ser enviado
         @param socket Socket de destino
