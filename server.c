@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <errno.h>
+#include <pthread.h>
 #include "biblioteca.h"
 
 typedef struct FileName_t{
@@ -32,6 +33,13 @@ typedef struct ClientList_t{
     Client * firstClient;
     Client * lastClient;
 }ClientList;
+
+typedef struct ArgsProcessCommandsFromClient_t{
+    int socket;
+    int idClient;   
+}ArgsProcessCommandsFromClient;
+
+ClientList * clientList;
 
 ClientList * initClientList(){
     ClientList * list = calloc(1, sizeof(ClientList));
@@ -88,36 +96,13 @@ void addFileNameIntoFileNameList(FileNameList * list, char * name){
     list->nFileNames ++;
 }
 
-int initServer(int port, struct sockaddr_in * serv){
-    int mysocket;                               /* socket used to listen for incoming connections */
-    memset(serv, 0, sizeof(*serv));             /* zero the struct before filling the fields */
-    serv->sin_family = AF_INET;                 /* set the type of connection to TCP/IP */
-    serv->sin_addr.s_addr = htonl(INADDR_ANY);  /* set our address to any interface */
-    serv->sin_port = htons(port);               /* set the server port number */
-
-    mysocket = socket(AF_INET, SOCK_STREAM, 0);
-
-    /* bind serv information to mysocket */
-    bind(mysocket, (struct sockaddr *)serv, sizeof(struct sockaddr));
-
-    /* start listening, allowing a queue of up to 1 pending connection */
-    listen(mysocket, 1);
-
-    return mysocket;
-}
-
 FileNameList * recvClientFileNames(int socket){
     
     FileNameList * list = initFileNameList();
     int countFiles = recvInt(socket);
     
-    for (int i = 0; i < countFiles; i++){
-        char * name = recvString(socket);
-        addFileNameIntoFileNameList(list, name);
-        
-        //TODO: Remover log
-        printf("* %s\n", name);
-    }
+    for (int i = 0; i < countFiles; i++)
+        addFileNameIntoFileNameList(list, recvString(socket));
 
     return list;   
 }
@@ -145,10 +130,41 @@ void sendFilesNames(ClientList * clientList, int socket){
     
 }
 
-void saveFileNames(ClientList * clientList, int socket){
-    int idClient = recvInt(socket);
+void saveFileNames(ClientList * clientList, int idClient, int socket){
     FileNameList * fileNameList = recvClientFileNames(socket);
     addClientIntoClientList(clientList, idClient, fileNameList);
+
+    printf(">> %d arquivos mapeados no cliente %d.\n", fileNameList->nFileNames, idClient);
+}
+
+void * processCommandsFromClient(void * arg){
+
+    ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
+    int clientSocket = argumentos->socket;
+    int idClient = argumentos->idClient;
+
+    while (true){
+        int command = recvInt(clientSocket);
+        switch (command)
+        {
+            case LIST_COMMAND:
+                sendFilesNames(clientList, clientSocket);
+                break;
+
+            case STATUS_COMMAND:
+                printf("STATUS_COMMAND\n");
+                break;
+            
+            case SEND_FILENAMES_COMMAND:
+                saveFileNames(clientList, idClient, clientSocket);
+                break;
+
+            default:
+                printf("ATENCAO: Comando inválido\n");
+                break;
+        }
+    }
+    return (void*) 0;
 }
 
 int main(int argc, char *argv[])
@@ -161,37 +177,35 @@ int main(int argc, char *argv[])
     struct sockaddr_in dest; 
     struct sockaddr_in serv;
     socklen_t socksize = sizeof(struct sockaddr_in);
-    int serverSocket = initServer(atoi(argv[1]), &serv);
 
-    ClientList * clientList = initClientList();
+    memset(&serv, 0, sizeof(serv));             
+    serv.sin_family = AF_INET;                 
+    serv.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv.sin_port = htons(atoi(argv[1]));   
+
+    int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+
+    bind(serverSocket, (struct sockaddr *)&serv, sizeof(struct sockaddr));
+    listen(serverSocket, 1);
+
+    clientList = initClientList();
 
     printf("Servidor ouvindo na porta: %s\n", argv[ 1 ] );
 
+    pthread_t * threadClient = NULL;
+    int countClients = 0;
+
     while(true){
-        printf("teste 1\n");
         int clientSocket = accept(serverSocket, (struct sockaddr *)&dest, &socksize);
-        printf("teste 2\n");
-        int command = recvInt(clientSocket);
-        printf("teste 3\n");
-        switch (command)
-        {
-            case LIST_COMMAND:
-                //sendFilesNames(clientList, clientSocket);
-                printf("LIST_COMMAND\n");
-                break;
+        
+        threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
+        
+        ArgsProcessCommandsFromClient * args = (ArgsProcessCommandsFromClient *) calloc(1, sizeof(ArgsProcessCommandsFromClient));
+        args->socket = clientSocket;
+        args->idClient = countClients;
 
-            case STATUS_COMMAND:
-                printf("STATUS_COMMAND\n");
-                break;
-            
-            case SEND_FILENAMES_COMMAND:
-                saveFileNames(clientList, clientSocket);
-                break;
-
-            default:
-                printf("ATENCAO: Comando inválido\n");
-                break;
-        }
+        pthread_create(threadClient, NULL, processCommandsFromClient, args);
+        countClients++;
     }
 
     close(serverSocket);
