@@ -6,9 +6,36 @@
 
 #define LIST_COMMAND 0
 #define STATUS_COMMAND 1
-#define SEND_FILENAMES_COMMAND 3
+#define SEND_CLIENT_INFO_COMMAND 3
+#define CLIENT_INFO_COMMAND 4
+#define DELETE_FILE_CLIENT 5
 #define true 1
 #define false 0
+
+typedef struct FileName_t{
+    char * name;
+    struct FileName_t * nextFileName;
+}FileName;
+
+typedef struct FileNameList_t{
+    int nFileNames;
+    FileName * firstFileName;
+    FileName * lastFileName;
+}FileNameList;
+
+typedef struct Client_t{
+    unsigned int idClient;
+    unsigned int port;
+    int ip;
+    FileNameList * FileNameList;
+    struct Client_t * nextClient;
+}Client;
+
+typedef struct ClientList_t{
+    int nClients;
+    Client * firstClient;
+    Client * lastClient;
+}ClientList;
 
 /*! Envia valor do tipo Int
         @param value  Valor inteiro a ser enviado

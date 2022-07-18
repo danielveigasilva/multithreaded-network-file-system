@@ -36,3 +36,4 @@ char* recvString( int socket ){
     recv(socket, value, nBytes, 0);
     return value;
 }
+

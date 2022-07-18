@@ -11,29 +11,6 @@
 #include <pthread.h>
 #include "biblioteca.h"
 
-typedef struct FileName_t{
-    char * name;
-    struct FileName_t * nextFileName;
-}FileName;
-
-typedef struct FileNameList_t{
-    int nFileNames;
-    FileName * firstFileName;
-    FileName * lastFileName;
-}FileNameList;
-
-typedef struct Client_t{
-    unsigned int idClient;
-    FileNameList * FileNameList;
-    struct Client_t * nextClient;
-}Client;
-
-typedef struct ClientList_t{
-    int nClients;
-    Client * firstClient;
-    Client * lastClient;
-}ClientList;
-
 typedef struct ArgsProcessCommandsFromClient_t{
     int socket;
     int idClient;   
@@ -51,12 +28,7 @@ ClientList * initClientList(){
     return list;
 }
 
-void addClientIntoClientList(ClientList * list, int idClient, FileNameList * fileNameList){
-    Client * client = calloc(1, sizeof(Client));
-    client->idClient = idClient;
-    client->FileNameList = fileNameList;
-    client->nextClient = NULL;
-
+void addClientIntoClientList(ClientList * list, Client * client){
     if (list->firstClient == NULL && list->lastClient == NULL){
         list->firstClient = client;
         list->lastClient = client;
@@ -96,6 +68,16 @@ void addFileNameIntoFileNameList(FileNameList * list, char * name){
     list->nFileNames ++;
 }
 
+Client* getClientByIdClient(ClientList * list, int idClient){
+    Client * client = list->firstClient;
+    while (client != NULL){
+        if (client->idClient == idClient)
+            return client;   
+        client = client->nextClient;
+    }
+    return NULL;
+}
+
 FileNameList * recvClientFileNames(int socket){
     
     FileNameList * list = initFileNameList();
@@ -130,11 +112,33 @@ void sendFilesNames(ClientList * clientList, int socket){
     
 }
 
-void saveFileNames(ClientList * clientList, int idClient, int socket){
-    FileNameList * fileNameList = recvClientFileNames(socket);
-    addClientIntoClientList(clientList, idClient, fileNameList);
+void saveClientInfo(ClientList * clientList, int idClient, int socket){
+    
+    Client * client = calloc(1, sizeof(Client));
+    client->idClient = idClient;
+    client->nextClient = NULL;
 
-    printf(">> %d arquivos mapeados no cliente %d.\n", fileNameList->nFileNames, idClient);
+    client->port = recvInt(socket);
+    client->ip = recvInt(socket);
+    client->FileNameList = recvClientFileNames(socket);
+
+    addClientIntoClientList(clientList, client);
+
+    printf(">> %d arquivos mapeados no cliente %d.\n", client->FileNameList->nFileNames, client->idClient);
+}
+
+void sendClientInfo(ClientList * clientList, int socket){
+    int idClient = recvInt(socket);
+    Client * client = getClientByIdClient(clientList, idClient);
+
+    //Status
+    sendInt(client == NULL ? 404 : 1, socket);
+    
+    if (client != NULL){
+        sendInt(client->ip, socket);
+        sendInt(client->port, socket);
+        sendInt(client->idClient, socket);
+    }
 }
 
 void * processCommandsFromClient(void * arg){
@@ -154,9 +158,13 @@ void * processCommandsFromClient(void * arg){
             case STATUS_COMMAND:
                 printf("STATUS_COMMAND\n");
                 break;
+
+            case CLIENT_INFO_COMMAND:
+                sendClientInfo(clientList, clientSocket);
+                break;
             
-            case SEND_FILENAMES_COMMAND:
-                saveFileNames(clientList, idClient, clientSocket);
+            case SEND_CLIENT_INFO_COMMAND:
+                saveClientInfo(clientList, idClient, clientSocket);
                 break;
 
             default:
