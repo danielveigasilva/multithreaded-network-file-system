@@ -102,10 +102,13 @@ void removeFileName(FileNameList * list, char * name){
             
             if (list->firstFileName == fileName)
                 list->firstFileName = fileName->nextFileName;
-            else if (list->lastFileName == fileName)
+            else if (list->lastFileName == fileName){
+                fileNameAnt->nextFileName = fileName->nextFileName;
                 list->lastFileName = fileNameAnt;
+            }
             else
                 fileNameAnt->nextFileName = fileName->nextFileName;
+            list->nFileNames--;
             break;
         }
         fileNameAnt = fileName;
