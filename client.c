@@ -36,7 +36,7 @@ int mapCommand(char* command){
     if (!strcmp(command, "info"))
         return CLIENT_INFO_COMMAND;
     if (!strcmp(command, "del"))
-        return DELETE_FILE_CLIENT;
+        return DELETE_FILE_CLIENT_COMMAND;
     return -1;
 }
 
@@ -144,43 +144,47 @@ int conectSocketServer(int portServer, int ipServer){
 }
 
 void deleteFileClient(int socket){
-    int idClient = 0;
-    scanf("%d", &idClient);
-
     char * fileName;
     scanf("%s", fileName);
 
     //Obtem dados do cliente com o arquivo
-    sendInt(CLIENT_INFO_COMMAND, socket);
-    sendInt(idClient, socket);
+    sendInt(DELETE_FILE_CLIENT_COMMAND, socket);
+    sendString(fileName, socket);
     Client * client = recvClientInfo(socket);
 
     if (client == NULL)
-        printf("#ERRO: Cliente não localizado.\n");
+        printf("#ERRO: Arquivo não localizado.\n");
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
         
         //Solicita delete arquivo
-        sendInt(DELETE_FILE_CLIENT, socketServerClient);
+        sendInt(DELETE_FILE_CLIENT_COMMAND, socketServerClient);
         sendString(fileName, socketServerClient);
     }  
 }
 
-void deleteFile(){
-    char * fileName = recvString(*socket);
+void deleteFile(char * directory, int socket){
+    //Montando path file
+    char * fileName = recvString(socket);
+    char * pathFile = directory; 
+    strcat(pathFile, fileName);
 
+    remove(pathFile);
 }
 
-void * processCommandsFromOtherClient(void * arg){
-    ArgsProcessCommandsFromOtherClient * args = (ArgsProcessCommandsFromOtherClient*) arg; 
-    int socket = args->socket;
+void * processCommandsFromOtherClient(void * args){
+    ArgsProcessCommandsFromOtherClient * argumentos = (ArgsProcessCommandsFromOtherClient*) args; 
+    
+    int socket = argumentos->socket;
+    char * directory = argumentos->directory;
+
     while (true){
         int command = recvInt(socket);
         switch (command){
 
-            case DELETE_FILE_CLIENT:
-                deleteFile();
+            case DELETE_FILE_CLIENT_COMMAND:
+                deleteFile(directory, socket);
                 break;
         }
     }
@@ -189,7 +193,7 @@ void * processCommandsFromOtherClient(void * arg){
 
 void * initClientServer(void * args){
 
-    ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)args;
+    ArgsInitClientServer *argumentos = (ArgsInitClientServer*)args;
     int portClient = argumentos->portClient;
     int ipClient = argumentos->ipClient;
     char * directory = argumentos->directory;
@@ -250,7 +254,7 @@ int main(int argc, char *argv[])
     //Realizando sincronização de arquivos disponíveis
     sendClientInfo(socketServer, portClient, ipClient, directory);
 
-    ArgsProcessCommandsFromClient * args = (ArgsProcessCommandsFromClient *) calloc(1, sizeof(ArgsProcessCommandsFromClient));
+    ArgsInitClientServer * args = (ArgsInitClientServer *) calloc(1, sizeof(ArgsInitClientServer));
     args->portClient = portClient;
     args->ipClient = ipClient;
     args->directory = directory;
@@ -280,7 +284,7 @@ int main(int argc, char *argv[])
                 getClientInfo(socketServer);
                 break;
 
-            case DELETE_FILE_CLIENT:
+            case DELETE_FILE_CLIENT_COMMAND:
                 deleteFileClient(socketServer);
                 break;
         }

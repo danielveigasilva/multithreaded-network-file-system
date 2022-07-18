@@ -8,7 +8,7 @@
 #define STATUS_COMMAND 1
 #define SEND_CLIENT_INFO_COMMAND 3
 #define CLIENT_INFO_COMMAND 4
-#define DELETE_FILE_CLIENT 5
+#define DELETE_FILE_CLIENT_COMMAND 5
 #define true 1
 #define false 0
 

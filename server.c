@@ -78,6 +78,41 @@ Client* getClientByIdClient(ClientList * list, int idClient){
     return NULL;
 }
 
+Client* getClientByFileName(ClientList * list, char * name){
+    Client * client = list->firstClient;
+    while (client != NULL){
+        FileName * fileName = client->FileNameList->firstFileName;
+        while (fileName != NULL){
+            if (!strcmp(fileName->name, name))
+                return client;
+            fileName = fileName->nextFileName;
+        }
+        client = client->nextClient;
+    }
+    return NULL;
+}
+
+void removeFileName(FileNameList * list, char * name){
+    
+    FileName * fileName = list->firstFileName;
+    FileName * fileNameAnt = NULL;
+
+    while (fileName != NULL){
+        if (!strcmp(fileName->name, name)){
+            
+            if (list->firstFileName == fileName)
+                list->firstFileName = fileName->nextFileName;
+            else if (list->lastFileName == fileName)
+                list->lastFileName = fileNameAnt;
+            else
+                fileNameAnt->nextFileName = fileName->nextFileName;
+            break;
+        }
+        fileNameAnt = fileName;
+        fileName = fileName->nextFileName;
+    }
+}
+
 FileNameList * recvClientFileNames(int socket){
     
     FileNameList * list = initFileNameList();
@@ -141,6 +176,23 @@ void sendClientInfo(ClientList * clientList, int socket){
     }
 }
 
+void deleteFileClient(ClientList * clientList, int socket){
+    char * fileName = recvString(socket);
+    Client * client = getClientByFileName(clientList, fileName);
+
+    //Status
+    sendInt(client == NULL ? 404 : 1, socket);
+    
+    if (client != NULL){
+        sendInt(client->ip, socket);
+        sendInt(client->port, socket);
+        sendInt(client->idClient, socket);
+
+        //Remove arquivo da estrutura
+        removeFileName(client->FileNameList, fileName);
+    }
+}
+
 void * processCommandsFromClient(void * arg){
 
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
@@ -165,6 +217,10 @@ void * processCommandsFromClient(void * arg){
             
             case SEND_CLIENT_INFO_COMMAND:
                 saveClientInfo(clientList, idClient, clientSocket);
+                break;
+            
+            case DELETE_FILE_CLIENT_COMMAND:
+                deleteFileClient(clientList, clientSocket);
                 break;
 
             default:
