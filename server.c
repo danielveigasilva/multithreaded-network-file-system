@@ -99,16 +99,21 @@ void removeFileName(FileNameList * list, char * name){
 
     while (fileName != NULL){
         if (!strcmp(fileName->name, name)){
-            
+
             if (list->firstFileName == fileName)
                 list->firstFileName = fileName->nextFileName;
-            else if (list->lastFileName == fileName){
-                fileNameAnt->nextFileName = fileName->nextFileName;
+            
+            if (list->lastFileName == fileName){
                 list->lastFileName = fileNameAnt;
+                if (list->lastFileName != NULL)
+                    list->lastFileName->nextFileName = fileName->nextFileName;
             }
-            else
+            
+            if (fileNameAnt != NULL)
                 fileNameAnt->nextFileName = fileName->nextFileName;
+            
             list->nFileNames--;
+            
             break;
         }
         fileNameAnt = fileName;
