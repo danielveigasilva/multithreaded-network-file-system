@@ -184,7 +184,7 @@ void sendClientInfo(ClientList * clientList, int socket){
     }
 }
 
-void deleteFileClient(ClientList * clientList, int socket){
+void sendClientOfFile(ClientList * clientList, int socket){
     char * fileName = recvString(socket);
     Client * client = getClientByFileName(clientList, fileName);
 
@@ -195,10 +195,15 @@ void deleteFileClient(ClientList * clientList, int socket){
         sendInt(client->ip, socket);
         sendInt(client->port, socket);
         sendInt(client->idClient, socket);
-
-        //Remove arquivo da estrutura
-        removeFileName(client->FileNameList, fileName);
     }
+}
+
+void deleteFileNameFromClient(ClientList * clientList, int socket){
+    
+    char * fileName = recvString(socket);
+    Client * client = getClientByFileName(clientList, fileName);
+    
+    removeFileName(client->FileNameList, fileName);
 }
 
 void * processCommandsFromClient(void * arg){
@@ -227,8 +232,12 @@ void * processCommandsFromClient(void * arg){
                 saveClientInfo(clientList, idClient, clientSocket);
                 break;
             
+            case GET_CLIENT_CONECT_COMMAND:
+                sendClientOfFile(clientList, clientSocket);
+                break;
+
             case DELETE_FILE_CLIENT_COMMAND:
-                deleteFileClient(clientList, clientSocket);
+                deleteFileNameFromClient(clientList, clientSocket);
                 break;
 
             default:

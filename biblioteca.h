@@ -9,6 +9,8 @@
 #define SEND_CLIENT_INFO_COMMAND 3
 #define CLIENT_INFO_COMMAND 4
 #define DELETE_FILE_CLIENT_COMMAND 5
+#define GET_FILE_COMMAND 6
+#define GET_CLIENT_CONECT_COMMAND 7
 #define true 1
 #define false 0
 

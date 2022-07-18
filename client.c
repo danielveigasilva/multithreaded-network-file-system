@@ -16,12 +16,14 @@
 typedef struct ArgsInitClientServer_t{
     int portClient;
     int ipClient;   
+    int socketServer;
     char * directory;
 }ArgsInitClientServer;
 
 
 typedef struct ArgsProcessCommandsFromOtherClient_t{
-    int socket;
+    int socketClient;
+    int socketServer;
     char * directory;
 }ArgsProcessCommandsFromOtherClient;
 
@@ -37,8 +39,14 @@ int mapCommand(char* command){
         return CLIENT_INFO_COMMAND;
     if (!strcmp(command, "del"))
         return DELETE_FILE_CLIENT_COMMAND;
+    if (!strcmp(command, "get"))
+        return GET_FILE_COMMAND;
     return -1;
 }
+
+
+
+
 
 void sendClientFileNames(char * directory, int socket){
     
@@ -101,27 +109,49 @@ int conectSocketServer(int portServer, int ipServer){
 
 
 
-void deleteFile(char * directory, int socket){
+void deleteFile(char * directory, int socketClient, int socketServer){
     //Montando path file
-    char * fileName = recvString(socket);
-    char * pathFile = directory; 
+    char * fileName = recvString(socketClient);
+    char pathFile[strlen(directory) + strlen(fileName) + 1];
+    strcpy(pathFile, directory); 
     strcat(pathFile, fileName);
 
-    remove(pathFile);
+    if (!remove(pathFile)){
+        //Atualiza estrutura do server
+        sendInt(DELETE_FILE_CLIENT_COMMAND, socketServer);
+        sendString(fileName, socketServer);
+    }
+    else    
+        printf("ERRO: %s\n", pathFile);
+}
+
+void sendFile(char * directory, int socketClient, int socketServer){
+    //Montando path file
+    char * fileName = recvString(socketClient);
+    char pathFile[strlen(directory) + strlen(fileName) + 1];
+    strcpy(pathFile, directory); 
+    strcat(pathFile, fileName);
+
+    printf("get %s\n", pathFile);
 }
 
 void * processCommandsFromOtherClient(void * args){
     ArgsProcessCommandsFromOtherClient * argumentos = (ArgsProcessCommandsFromOtherClient*) args; 
     
-    int socket = argumentos->socket;
+    int socketClient = argumentos->socketClient;
+    int socketServer = argumentos->socketServer;
     char * directory = argumentos->directory;
 
     while (true){
-        int command = recvInt(socket);
+        int command = recvInt(socketClient);
         switch (command){
 
             case DELETE_FILE_CLIENT_COMMAND:
-                deleteFile(directory, socket);
+                deleteFile(directory, socketClient, socketServer);
+                break;
+            
+            case GET_FILE_COMMAND:
+                sendFile(directory, socketClient, socketServer);
                 break;
         }
     }
@@ -133,6 +163,7 @@ void * initClientServer(void * args){
     ArgsInitClientServer *argumentos = (ArgsInitClientServer*)args;
     int portClient = argumentos->portClient;
     int ipClient = argumentos->ipClient;
+    int socketServer = argumentos->socketServer;
     char * directory = argumentos->directory;
 
 
@@ -157,7 +188,8 @@ void * initClientServer(void * args){
         
         ArgsProcessCommandsFromOtherClient * args = (ArgsProcessCommandsFromOtherClient *) calloc(1, sizeof(ArgsProcessCommandsFromOtherClient));
         args->directory = directory;
-        args->socket = clientSocket;
+        args->socketClient = clientSocket;
+        args->socketServer = socketServer;
         
         threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
         pthread_create(threadClient, NULL, processCommandsFromOtherClient, args);
@@ -218,7 +250,7 @@ void deleteFileClient(int socket){
     scanf("%s", fileName);
 
     //Obtem dados do cliente com o arquivo
-    sendInt(DELETE_FILE_CLIENT_COMMAND, socket);
+    sendInt(GET_CLIENT_CONECT_COMMAND, socket);
     sendString(fileName, socket);
     Client * client = recvClientInfo(socket);
 
@@ -231,6 +263,31 @@ void deleteFileClient(int socket){
         //Solicita delete arquivo
         sendInt(DELETE_FILE_CLIENT_COMMAND, socketServerClient);
         sendString(fileName, socketServerClient);
+
+        close(socketServerClient);
+    }  
+}
+
+void getFileClient(int socket){
+    char * fileName;
+    scanf("%s", fileName);
+
+    //Obtem dados do cliente com o arquivo
+    sendInt(GET_CLIENT_CONECT_COMMAND, socket);
+    sendString(fileName, socket);
+    Client * client = recvClientInfo(socket);
+
+    if (client == NULL)
+        printf("#ERRO: Arquivo não localizado.\n");
+    else {
+        //Conecta ao server do cliente
+        int socketServerClient = conectSocketServer(client->port, client->ip);
+        
+        //Solicita arquivo
+        sendInt(GET_FILE_COMMAND, socketServerClient);
+        sendString(fileName, socketServerClient);
+
+        close(socketServerClient);
     }  
 }
 
@@ -265,6 +322,7 @@ int main(int argc, char *argv[])
     args->portClient = portClient;
     args->ipClient = ipClient;
     args->directory = directory;
+    args->socketServer = socketServer;
 
     pthread_t * threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
     pthread_create(threadClient, NULL, initClientServer, args);
@@ -294,6 +352,10 @@ int main(int argc, char *argv[])
 
             case DELETE_FILE_CLIENT_COMMAND:
                 deleteFileClient(socketServer);
+                break;
+
+            case GET_FILE_COMMAND:
+                getFileClient(socketServer);
                 break;
         }
         
