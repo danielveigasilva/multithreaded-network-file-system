@@ -44,8 +44,22 @@ int mapCommand(char* command){
     return -1;
 }
 
+int conectSocketServer(int portServer, int ipServer){
 
+    struct sockaddr_in dest;
+    int socketServer = socket(AF_INET, SOCK_STREAM, 0);
 
+    memset(&dest, 0, sizeof(dest));                
+    dest.sin_family = AF_INET;
+    dest.sin_addr.s_addr = htonl(ipServer); 
+    dest.sin_port = htons(portServer); 
+
+    int connectResult = connect(socketServer, (struct sockaddr *)&dest, sizeof(struct sockaddr_in));
+    if( connectResult == - 1 )
+   	    return -1;
+
+    return socketServer;
+}
 
 
 void sendClientFileNames(char * directory, int socket){
@@ -89,25 +103,14 @@ Client* recvClientInfo(int socket){
     return client;
 }
 
-int conectSocketServer(int portServer, int ipServer){
+void sendFileClient(FILE * file, int socket){
+    
 
-    struct sockaddr_in dest;
-    int socketServer = socket(AF_INET, SOCK_STREAM, 0);
-
-    memset(&dest, 0, sizeof(dest));                
-    dest.sin_family = AF_INET;
-    dest.sin_addr.s_addr = htonl(ipServer); 
-    dest.sin_port = htons(portServer); 
-
-    int connectResult = connect(socketServer, (struct sockaddr *)&dest, sizeof(struct sockaddr_in));
-    if( connectResult == - 1 )
-   	    return -1;
-
-    return socketServer;
 }
 
+FILE * recvFileClient(int socket){
 
-
+}
 
 void deleteFile(char * directory, int socketClient, int socketServer){
     //Montando path file
@@ -125,14 +128,16 @@ void deleteFile(char * directory, int socketClient, int socketServer){
         printf("ERRO: %s\n", pathFile);
 }
 
-void sendFile(char * directory, int socketClient, int socketServer){
+void sendFile(char * directory, int socketClient){
     //Montando path file
     char * fileName = recvString(socketClient);
     char pathFile[strlen(directory) + strlen(fileName) + 1];
     strcpy(pathFile, directory); 
     strcat(pathFile, fileName);
 
-    printf("get %s\n", pathFile);
+    //Envia arquivo
+    FILE * file = fopen(pathFile, "r");
+    sendFileClient(file, socketClient);
 }
 
 void * processCommandsFromOtherClient(void * args){
@@ -151,7 +156,7 @@ void * processCommandsFromOtherClient(void * args){
                 break;
             
             case GET_FILE_COMMAND:
-                sendFile(directory, socketClient, socketServer);
+                sendFile(directory, socketClient);
                 break;
         }
     }
@@ -276,6 +281,8 @@ void getFileClient(int socket){
     sendInt(GET_CLIENT_CONECT_COMMAND, socket);
     sendString(fileName, socket);
     Client * client = recvClientInfo(socket);
+
+    //TODO: tratamento caso arquivo esteja no memso cliente da requisicao
 
     if (client == NULL)
         printf("#ERRO: Arquivo não localizado.\n");
