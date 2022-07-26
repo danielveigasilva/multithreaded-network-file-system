@@ -44,11 +44,11 @@ int mapCommand(char* command){
         return LIST_COMMAND;
     if (!strcmp(command, "status"))
         return STATUS_COMMAND;
-    if (!strcmp(command, "sync"))
-        return SEND_CLIENT_INFO_COMMAND;
+    //if (!strcmp(command, "sync"))
+    //    return SEND_CLIENT_INFO_COMMAND;
     if (!strcmp(command, "info"))
         return CLIENT_INFO_COMMAND;
-    if (!strcmp(command, "del"))
+    if (!strcmp(command, "rm"))
         return DELETE_FILE_CLIENT_COMMAND;
     if (!strcmp(command, "get"))
         return GET_FILE_COMMAND;
@@ -210,16 +210,18 @@ void recvFilesNames(int socket){
     
     sendInt(LIST_COMMAND, socket);
     int countClients = recvInt(socket);
-    
+
+    printf("\n");
     for (int i = 0; i < countClients; i++){
         
         int idCliente = recvInt(socket);
         int countFileNames = recvInt(socket);
 
-        printf("#Cliente - %d\n", idCliente);
+        printf(" Cliente - %d\n", idCliente);
 
         for (int j = 0; j < countFileNames; j++)
-            printf("  * %s\n", recvString(socket));   
+            printf("  * %s\n", recvString(socket));
+        printf("\n");
     }
 }
 
@@ -245,9 +247,9 @@ void getClientInfo(int socket){
     Client * client = recvClientInfo(socket);
 
     if (client == NULL)
-        printf("#ERRO: Cliente não localizado.\n");
+        printf(" FALHA: Cliente não localizado.\n");
     else{
-        printf("#Cliente - %d\n", client->idClient);
+        printf(" Cliente - %d\n", client->idClient);
         printf("  * IP: %d\n", client->ip);
         printf("  * PORTA: %d\n", client->port);
     }  
@@ -286,14 +288,14 @@ void * getFileClientAndSave(void * _args){
     char * directory = args->directory;
     Client * client = args->client;
 
-    if (myId == client->idClient){
+    if (client == NULL){
+        printf(" Arquivo %s nao localizado.\n", fileName);
+        return (void *) EXIT_FAILURE;
+    }
+    else if (myId == client->idClient){ //TODO: Verificar se trava é válida
         printf(" Arquivo %s já pertence ao cliente.\n", fileName);
         return (void *) EXIT_FAILURE;
-    }
-    else if (client == NULL){
-        printf(" FALHA: Arquivo %s nao localizado.\n", fileName);
-        return (void *) EXIT_FAILURE;
-    }
+    } 
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
@@ -313,6 +315,8 @@ void * getFileClientAndSave(void * _args){
         printf(" Arquivo %s baixado!\n", fileName);
         close(socketServerClient);
 
+        //TODO: atualizar arquivos no server
+
         return (void *) EXIT_SUCCESS;
     }
 }
@@ -321,22 +325,20 @@ void getFileClient(int socket, char * directory, int idClient){
     
     char delimiter = ' ';
     int nFiles = 0;
-    char ** files = (char **) calloc(1, sizeof(char*));
+    char ** files = NULL;
 
     while (delimiter != '\n'){
-        
-        files = (char **) realloc(files, nFiles + 1);
-        files[nFiles] = (char*) calloc(MAXRCVLEN, sizeof(char));
-        
-        scanf("%s", files[nFiles]);
+        files = (char**) realloc(files, (nFiles + 1) * sizeof(char*));
+        files[nFiles] = (char*) calloc((MAXRCVLEN + 1), sizeof(char));
 
-        nFiles++;
+        scanf("%s", files[nFiles]);
         delimiter = getchar();
+        nFiles++;
     }
 
     pthread_t * threadFile = NULL;
     for (int i = 0; i < nFiles; i++){
-        
+
         //Obtem dados do cliente com o arquivo
         sendInt(GET_CLIENT_CONECT_COMMAND, socket);
         sendString(files[i], socket);
