@@ -209,6 +209,15 @@ void deleteFileNameFromClient(ClientList * clientList, int socket){
     removeFileName(client->FileNameList, fileName);
 }
 
+void addFileNameFromClient(ClientList * clientList , int socket){
+    
+    int idClient = recvInt(socket);
+    char * fileName = recvString(socket);
+    Client * client = getClientByIdClient(clientList, idClient);
+
+    addFileNameIntoFileNameList(client->FileNameList, fileName);
+}
+
 void * processCommandsFromClient(void * arg){
 
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
@@ -241,6 +250,10 @@ void * processCommandsFromClient(void * arg){
 
             case DELETE_FILE_CLIENT_COMMAND:
                 deleteFileNameFromClient(clientList, clientSocket);
+                break;
+            
+            case ADD_FILE_CLIENT_COMMAND:
+                addFileNameFromClient(clientList, clientSocket);
                 break;
 
             default:

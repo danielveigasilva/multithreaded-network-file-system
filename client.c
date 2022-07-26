@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <time.h>
 #include "biblioteca.h"
 
 #define MAXRCVLEN 500
@@ -265,7 +266,7 @@ void deleteFileClient(int socket){
     Client * client = recvClientInfo(socket);
 
     if (client == NULL)
-        printf(" # ERRO: Arquivo não localizado.\n");
+        printf(" FALHA: Arquivo não localizado.\n");
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
@@ -304,19 +305,42 @@ void * getFileClientAndSave(void * _args){
         sendInt(GET_FILE_COMMAND, socketServerClient);
         sendString(fileName, socketServerClient);
 
+        //Monta modelo de nome de arquivo
+        char modelFileName [MAXRCVLEN];
+        char posfix[] = "_client%d_%d%d%d_%d%d.";
+        int salto = 0;
+        for (int i = 0; i < strlen(fileName); i++){
+            if (fileName[i] == '.'){
+                modelFileName[i] = '\0';
+                strcat(modelFileName, posfix);
+                salto = strlen(posfix) - 1;
+            }
+            else
+                modelFileName[i + salto] = fileName[i];
+        }
+        modelFileName[strlen(fileName) + salto] = '\0';
+
+        time_t t = time(NULL);
+        struct tm tm = *localtime(&t);
+
+        char newFileName [MAXRCVLEN];
+        sprintf(newFileName, modelFileName, client->idClient, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+
         //Montando path file
-        char pathFile[strlen(directory) + strlen(fileName) + 1];
+        char pathFile[strlen(directory) + strlen(newFileName) + 1];
         strcpy(pathFile, directory); 
-        strcat(pathFile, fileName);
+        strcat(pathFile, newFileName);
 
         //Recebe arquivo
         recvFile(pathFile, socketServerClient);
-
         close(socketServerClient);
 
-        //TODO: atualizar arquivos no server
+        //Atualiza estrutura do server
+        sendInt(ADD_FILE_CLIENT_COMMAND, socketServer);
+        sendInt(myId, socketServer);
+        sendString(newFileName, socketServer);
 
-        printf(" Arquivo %s baixado!\n", fileName);
+        printf(" Arquivo %s baixado, nomeado como %s \n", fileName, newFileName);
         return (void *) EXIT_SUCCESS;
     }
 }
@@ -345,6 +369,7 @@ void getFileClient(int socket, char * directory, int idClient){
         sendString(files[i], socket);
         Client * client = recvClientInfo(socket);
 
+        //Cria thread para transferencia
         ArgsGetFileClientAndSave * args = (ArgsGetFileClientAndSave *) calloc(1, sizeof(ArgsGetFileClientAndSave));
         args->socket = socket;
         args->idClient = idClient;
@@ -355,7 +380,6 @@ void getFileClient(int socket, char * directory, int idClient){
         threadFile = (pthread_t*) calloc(1, sizeof(pthread_t));
         pthread_create(threadFile, NULL, getFileClientAndSave, args);  
     } 
-    printf("> ");
 }
 
 
