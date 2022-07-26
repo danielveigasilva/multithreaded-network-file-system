@@ -282,18 +282,18 @@ void * getFileClientAndSave(void * _args){
 
     ArgsGetFileClientAndSave * args = (ArgsGetFileClientAndSave *) _args;
 
-    int socket = args->socket;
+    int socketServer = args->socket;
     int myId = args->idClient;
     char * fileName = args->fileName; 
     char * directory = args->directory;
     Client * client = args->client;
 
     if (client == NULL){
-        printf(" Arquivo %s nao localizado.\n", fileName);
+        printf("Arquivo %s nao localizado.\n", fileName);
         return (void *) EXIT_FAILURE;
     }
     else if (myId == client->idClient){ //TODO: Verificar se trava é válida
-        printf(" Arquivo %s já pertence ao cliente.\n", fileName);
+        printf("Arquivo %s já pertence ao cliente.\n", fileName);
         return (void *) EXIT_FAILURE;
     } 
     else {
@@ -312,11 +312,11 @@ void * getFileClientAndSave(void * _args){
         //Recebe arquivo
         recvFile(pathFile, socketServerClient);
 
-        printf(" Arquivo %s baixado!\n", fileName);
         close(socketServerClient);
 
         //TODO: atualizar arquivos no server
 
+        printf(" Arquivo %s baixado!\n", fileName);
         return (void *) EXIT_SUCCESS;
     }
 }
@@ -328,6 +328,7 @@ void getFileClient(int socket, char * directory, int idClient){
     char ** files = NULL;
 
     while (delimiter != '\n'){
+
         files = (char**) realloc(files, (nFiles + 1) * sizeof(char*));
         files[nFiles] = (char*) calloc((MAXRCVLEN + 1), sizeof(char));
 
@@ -354,6 +355,7 @@ void getFileClient(int socket, char * directory, int idClient){
         threadFile = (pthread_t*) calloc(1, sizeof(pthread_t));
         pthread_create(threadFile, NULL, getFileClientAndSave, args);  
     } 
+    printf("> ");
 }
 
 
