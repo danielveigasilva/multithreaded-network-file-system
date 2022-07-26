@@ -11,6 +11,9 @@
 #define DELETE_FILE_CLIENT_COMMAND 5
 #define GET_FILE_COMMAND 6
 #define GET_CLIENT_CONECT_COMMAND 7
+
+#define FILE_BLOCK_SIZE 5
+
 #define true 1
 #define false 0
 
@@ -80,3 +83,17 @@ void sendString( char* value, int socket );
         @return Tamanho da mensagem 
         */
 char* recvString( int socket );
+
+/*! Envia Arquivo
+        @param value  string a ser enviada
+        @param socket Socket de destino
+        @return Tamanho da mensagem 
+        */
+void sendFile( char * pathFile, int socket );
+
+/*! Envia Arquivo
+        @param value  string a ser enviada
+        @param socket Socket de destino
+        @return Tamanho da mensagem 
+        */
+void recvFile(char * pathNewFile, int socket );

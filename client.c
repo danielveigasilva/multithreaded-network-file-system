@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <fcntl.h>
 #include "biblioteca.h"
 
 #define MAXRCVLEN 500
@@ -61,7 +62,6 @@ int conectSocketServer(int portServer, int ipServer){
     return socketServer;
 }
 
-
 void sendClientFileNames(char * directory, int socket){
     
     DIR *dir = opendir(directory);
@@ -103,15 +103,6 @@ Client* recvClientInfo(int socket){
     return client;
 }
 
-void sendFileClient(FILE * file, int socket){
-    
-
-}
-
-FILE * recvFileClient(int socket){
-
-}
-
 void deleteFile(char * directory, int socketClient, int socketServer){
     //Montando path file
     char * fileName = recvString(socketClient);
@@ -128,7 +119,7 @@ void deleteFile(char * directory, int socketClient, int socketServer){
         printf("ERRO: %s\n", pathFile);
 }
 
-void sendFile(char * directory, int socketClient){
+void sendFileClient(char * directory, int socketClient){
     //Montando path file
     char * fileName = recvString(socketClient);
     char pathFile[strlen(directory) + strlen(fileName) + 1];
@@ -136,8 +127,7 @@ void sendFile(char * directory, int socketClient){
     strcat(pathFile, fileName);
 
     //Envia arquivo
-    FILE * file = fopen(pathFile, "r");
-    sendFileClient(file, socketClient);
+    sendFile(pathFile, socketClient);
 }
 
 void * processCommandsFromOtherClient(void * args){
@@ -156,7 +146,7 @@ void * processCommandsFromOtherClient(void * args){
                 break;
             
             case GET_FILE_COMMAND:
-                sendFile(directory, socketClient);
+                sendFileClient(directory, socketClient);
                 break;
         }
     }
@@ -251,7 +241,7 @@ void getClientInfo(int socket){
 }
 
 void deleteFileClient(int socket){
-    char * fileName;
+    char fileName [MAXRCVLEN];
     scanf("%s", fileName);
 
     //Obtem dados do cliente com o arquivo
@@ -260,7 +250,7 @@ void deleteFileClient(int socket){
     Client * client = recvClientInfo(socket);
 
     if (client == NULL)
-        printf("#ERRO: Arquivo não localizado.\n");
+        printf(" # ERRO: Arquivo não localizado.\n");
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
@@ -273,8 +263,8 @@ void deleteFileClient(int socket){
     }  
 }
 
-void getFileClient(int socket){
-    char * fileName;
+void getFileClient(int socket, char * directory){
+    char fileName[MAXRCVLEN];
     scanf("%s", fileName);
 
     //Obtem dados do cliente com o arquivo
@@ -285,7 +275,7 @@ void getFileClient(int socket){
     //TODO: tratamento caso arquivo esteja no memso cliente da requisicao
 
     if (client == NULL)
-        printf("#ERRO: Arquivo não localizado.\n");
+        printf(" # ERRO: Arquivo não localizado.\n");
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
@@ -294,6 +284,15 @@ void getFileClient(int socket){
         sendInt(GET_FILE_COMMAND, socketServerClient);
         sendString(fileName, socketServerClient);
 
+        //Montando path file
+        char pathFile[strlen(directory) + strlen(fileName) + 1];
+        strcpy(pathFile, directory); 
+        strcat(pathFile, fileName);
+
+        //Recebe arquivo
+        recvFile(pathFile, socketServerClient);
+
+        printf(" > Arquivo %s baixado!\n", fileName);
         close(socketServerClient);
     }  
 }
@@ -338,7 +337,7 @@ int main(int argc, char *argv[])
     while (true)
     {
         char command[500];
-        printf(">");
+        printf("> ");
         scanf("%s", command);
 
         int codCommand = mapCommand(command);
@@ -362,7 +361,7 @@ int main(int argc, char *argv[])
                 break;
 
             case GET_FILE_COMMAND:
-                getFileClient(socketServer);
+                getFileClient(socketServer, directory);
                 break;
         }
         
