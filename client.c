@@ -29,6 +29,16 @@ typedef struct ArgsProcessCommandsFromOtherClient_t{
 }ArgsProcessCommandsFromOtherClient;
 
 
+typedef struct ArgsGetFileClientAndSave_t{
+    int socket;
+    int idClient;
+    char * fileName;
+    char * directory;
+    Client * client;
+}ArgsGetFileClientAndSave;
+
+
+
 int mapCommand(char* command){
     if (!strcmp(command, "list"))
         return LIST_COMMAND;
@@ -46,7 +56,7 @@ int mapCommand(char* command){
 }
 
 int conectSocketServer(int portServer, int ipServer){
-
+    //TODO: Ajuster parametro ipServer
     struct sockaddr_in dest;
     int socketServer = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -213,12 +223,15 @@ void recvFilesNames(int socket){
     }
 }
 
-void sendClientInfo(int socket, int portClient, int ipClient, char * directory){
+int sendClientInfo(int socket, int portClient, int ipClient, char * directory){
     sendInt(SEND_CLIENT_INFO_COMMAND, socket);
     
     sendInt(portClient, socket);
     sendInt(ipClient, socket);
     sendClientFileNames(directory, socket);
+
+    int idClient = recvInt(socket);
+    return idClient;
 }
 
 void getClientInfo(int socket){
@@ -263,19 +276,24 @@ void deleteFileClient(int socket){
     }  
 }
 
-void getFileClient(int socket, char * directory){
-    char fileName[MAXRCVLEN];
-    scanf("%s", fileName);
+void * getFileClientAndSave(void * _args){
 
-    //Obtem dados do cliente com o arquivo
-    sendInt(GET_CLIENT_CONECT_COMMAND, socket);
-    sendString(fileName, socket);
-    Client * client = recvClientInfo(socket);
+    ArgsGetFileClientAndSave * args = (ArgsGetFileClientAndSave *) _args;
 
-    //TODO: tratamento caso arquivo esteja no memso cliente da requisicao
+    int socket = args->socket;
+    int myId = args->idClient;
+    char * fileName = args->fileName; 
+    char * directory = args->directory;
+    Client * client = args->client;
 
-    if (client == NULL)
-        printf(" # ERRO: Arquivo não localizado.\n");
+    if (myId == client->idClient){
+        printf(" Arquivo %s já pertence ao cliente.\n", fileName);
+        return (void *) EXIT_FAILURE;
+    }
+    else if (client == NULL){
+        printf(" FALHA: Arquivo %s nao localizado.\n", fileName);
+        return (void *) EXIT_FAILURE;
+    }
     else {
         //Conecta ao server do cliente
         int socketServerClient = conectSocketServer(client->port, client->ip);
@@ -292,9 +310,48 @@ void getFileClient(int socket, char * directory){
         //Recebe arquivo
         recvFile(pathFile, socketServerClient);
 
-        printf(" > Arquivo %s baixado!\n", fileName);
+        printf(" Arquivo %s baixado!\n", fileName);
         close(socketServerClient);
-    }  
+
+        return (void *) EXIT_SUCCESS;
+    }
+}
+
+void getFileClient(int socket, char * directory, int idClient){
+    
+    char delimiter = ' ';
+    int nFiles = 0;
+    char ** files = (char **) calloc(1, sizeof(char*));
+
+    while (delimiter != '\n'){
+        
+        files = (char **) realloc(files, nFiles + 1);
+        files[nFiles] = (char*) calloc(MAXRCVLEN, sizeof(char));
+        
+        scanf("%s", files[nFiles]);
+
+        nFiles++;
+        delimiter = getchar();
+    }
+
+    pthread_t * threadFile = NULL;
+    for (int i = 0; i < nFiles; i++){
+        
+        //Obtem dados do cliente com o arquivo
+        sendInt(GET_CLIENT_CONECT_COMMAND, socket);
+        sendString(files[i], socket);
+        Client * client = recvClientInfo(socket);
+
+        ArgsGetFileClientAndSave * args = (ArgsGetFileClientAndSave *) calloc(1, sizeof(ArgsGetFileClientAndSave));
+        args->socket = socket;
+        args->idClient = idClient;
+        args->fileName = files[i];
+        args->directory = directory;
+        args->client = client;
+        
+        threadFile = (pthread_t*) calloc(1, sizeof(pthread_t));
+        pthread_create(threadFile, NULL, getFileClientAndSave, args);  
+    } 
 }
 
 
@@ -321,7 +378,7 @@ int main(int argc, char *argv[])
     }
 
     //Realizando sincronização de arquivos disponíveis
-    sendClientInfo(socketServer, portClient, ipClient, directory);
+    int idClient = sendClientInfo(socketServer, portClient, ipClient, directory);
 
     //Criação de thread para mini-servidor
     ArgsInitClientServer * args = (ArgsInitClientServer *) calloc(1, sizeof(ArgsInitClientServer));
@@ -361,7 +418,7 @@ int main(int argc, char *argv[])
                 break;
 
             case GET_FILE_COMMAND:
-                getFileClient(socketServer, directory);
+                getFileClient(socketServer, directory, idClient);
                 break;
         }
         

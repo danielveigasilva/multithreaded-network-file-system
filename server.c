@@ -167,6 +167,9 @@ void saveClientInfo(ClientList * clientList, int idClient, int socket){
 
     addClientIntoClientList(clientList, client);
 
+    //Envia id gerado
+    sendInt(idClient, socket);
+
     printf(">> %d arquivos mapeados no cliente %d.\n", client->FileNameList->nFileNames, client->idClient);
 }
 
