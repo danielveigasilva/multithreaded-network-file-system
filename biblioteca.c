@@ -111,7 +111,7 @@ char * getMyLocalIP(){
     struct hostent *host_entry = gethostbyname(hostName);
   
     char *ip = inet_ntoa(*((struct in_addr*)
-                           host_entry->h_addr_list[1]));
+                           host_entry->h_addr_list[0]));
     return ip;
 }
 
