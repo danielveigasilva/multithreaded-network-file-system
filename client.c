@@ -16,8 +16,7 @@
 #define MAXRCVLEN 500
 
 typedef struct ArgsInitClientServer_t{
-    int portClient;
-    int ipClient;   
+    struct sockaddr_in clientServ;  
     int socketServer;
     char * directory;
 }ArgsInitClientServer;
@@ -56,14 +55,14 @@ int mapCommand(char* command){
     return -1;
 }
 
-int conectSocketServer(int portServer, int ipServer){
+int conectSocketServer(int portServer, char * ipServer){
     //TODO: Ajuster parametro ipServer
     struct sockaddr_in dest;
     int socketServer = socket(AF_INET, SOCK_STREAM, 0);
 
     memset(&dest, 0, sizeof(dest));                
     dest.sin_family = AF_INET;
-    dest.sin_addr.s_addr = htonl(ipServer); 
+    dest.sin_addr.s_addr = inet_addr(ipServer); 
     dest.sin_port = htons(portServer); 
 
     int connectResult = connect(socketServer, (struct sockaddr *)&dest, sizeof(struct sockaddr_in));
@@ -107,7 +106,7 @@ Client* recvClientInfo(int socket){
     if (status == 404)
         return NULL;
 
-    client->ip = recvInt(socket);
+    client->ip = recvString(socket);
     client->port = recvInt(socket);
     client->idClient = recvInt(socket);
 
@@ -167,20 +166,12 @@ void * processCommandsFromOtherClient(void * args){
 void * initClientServer(void * args){
 
     ArgsInitClientServer *argumentos = (ArgsInitClientServer*)args;
-    int portClient = argumentos->portClient;
-    int ipClient = argumentos->ipClient;
     int socketServer = argumentos->socketServer;
     char * directory = argumentos->directory;
+    struct sockaddr_in serv = argumentos->clientServ;
 
-
-    struct sockaddr_in dest; 
-    struct sockaddr_in serv;
-    socklen_t socksize = sizeof(struct sockaddr_in);
-
-    memset(&serv, 0, sizeof(serv));             
-    serv.sin_family = AF_INET;                 
-    serv.sin_addr.s_addr = htonl(ipClient);
-    serv.sin_port = htons(portClient);   
+    struct sockaddr_in dest;
+    socklen_t socksize = sizeof(struct sockaddr_in);   
 
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -226,11 +217,11 @@ void recvFilesNames(int socket){
     }
 }
 
-int sendClientInfo(int socket, int portClient, int ipClient, char * directory){
+int sendClientInfo(int socket, int portClient, char * ipClient, char * directory){
     sendInt(SEND_CLIENT_INFO_COMMAND, socket);
     
     sendInt(portClient, socket);
-    sendInt(ipClient, socket);
+    sendString(ipClient, socket);
     sendClientFileNames(directory, socket);
 
     int idClient = recvInt(socket);
@@ -251,7 +242,7 @@ void getClientInfo(int socket){
         printf(" FALHA: Cliente não localizado.\n");
     else{
         printf(" Cliente - %d\n", client->idClient);
-        printf("  * IP: %d\n", client->ip);
+        printf("  * IP: %s\n", client->ip);
         printf("  * PORTA: %d\n", client->port);
     }  
 }
@@ -351,6 +342,7 @@ void getFileClient(int socket, char * directory, int idClient){
     int nFiles = 0;
     char ** files = NULL;
 
+    //Obtem lista de arquivos desejados
     while (delimiter != '\n'){
 
         files = (char**) realloc(files, (nFiles + 1) * sizeof(char*));
@@ -386,17 +378,16 @@ void getFileClient(int socket, char * directory, int idClient){
 
 int main(int argc, char *argv[])
 {
-	if( argc < 4 ){ 
+	if( argc < 5 ){ 
         printf("ATENCAO: quantidade de argumentos insuficiente.\n");
         return EXIT_FAILURE;
     }
 
     //Inicialização de variáveis
     char * directory    = argv[1];
-    int portServer      = atoi(argv[2]);
-    int portClient      = atoi(argv[3]);
-    int ipServer        = INADDR_LOOPBACK; //TODO: Passar como parametro
-    int ipClient        = INADDR_LOOPBACK;
+    int portClient      = atoi(argv[2]);
+    char * ipServer     = argv[3];
+    int portServer      = atoi(argv[4]);
 
     //Conexão com servidor
     int socketServer = conectSocketServer(portServer, ipServer);
@@ -405,13 +396,20 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
+    //Configurando endereço do mini-servidor
+    struct sockaddr_in serv;
+    memset(&serv, 0, sizeof(serv));             
+    serv.sin_family = AF_INET;                 
+    serv.sin_addr.s_addr = INADDR_ANY;
+    serv.sin_port = htons(portClient);
+
     //Realizando sincronização de arquivos disponíveis
+    char * ipClient = getMyLocalIP();
     int idClient = sendClientInfo(socketServer, portClient, ipClient, directory);
 
     //Criação de thread para mini-servidor
     ArgsInitClientServer * args = (ArgsInitClientServer *) calloc(1, sizeof(ArgsInitClientServer));
-    args->portClient = portClient;
-    args->ipClient = ipClient;
+    args->clientServ = serv;
     args->directory = directory;
     args->socketServer = socketServer;
 

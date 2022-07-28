@@ -32,7 +32,7 @@ typedef struct FileNameList_t{
 typedef struct Client_t{
     unsigned int idClient;
     unsigned int port;
-    int ip;
+    char * ip;
     FileNameList * FileNameList;
     struct Client_t * nextClient;
 }Client;
@@ -98,3 +98,5 @@ void sendFile( char * pathFile, int socket );
         @return Tamanho da mensagem 
         */
 void recvFile(char * pathNewFile, int socket );
+
+char * getMyLocalIP();

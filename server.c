@@ -162,7 +162,7 @@ void saveClientInfo(ClientList * clientList, int idClient, int socket){
     client->nextClient = NULL;
 
     client->port = recvInt(socket);
-    client->ip = recvInt(socket);
+    client->ip = recvString(socket);
     client->FileNameList = recvClientFileNames(socket);
 
     addClientIntoClientList(clientList, client);
@@ -170,7 +170,7 @@ void saveClientInfo(ClientList * clientList, int idClient, int socket){
     //Envia id gerado
     sendInt(idClient, socket);
 
-    printf(">> %d arquivos mapeados no cliente %d.\n", client->FileNameList->nFileNames, client->idClient);
+    printf(">> Cliente %d (%s : %d) - %d arquivos mapeados.\n", client->idClient, client->ip, client->port, client->FileNameList->nFileNames);
 }
 
 void sendClientInfo(ClientList * clientList, int socket){
@@ -181,7 +181,7 @@ void sendClientInfo(ClientList * clientList, int socket){
     sendInt(client == NULL ? 404 : 1, socket);
     
     if (client != NULL){
-        sendInt(client->ip, socket);
+        sendString(client->ip, socket);
         sendInt(client->port, socket);
         sendInt(client->idClient, socket);
     }
@@ -195,7 +195,7 @@ void sendClientOfFile(ClientList * clientList, int socket){
     sendInt(client == NULL ? 404 : 1, socket);
     
     if (client != NULL){
-        sendInt(client->ip, socket);
+        sendString(client->ip, socket);
         sendInt(client->port, socket);
         sendInt(client->idClient, socket);
     }
@@ -277,7 +277,7 @@ int main(int argc, char *argv[])
 
     memset(&serv, 0, sizeof(serv));             
     serv.sin_family = AF_INET;                 
-    serv.sin_addr.s_addr = htonl(INADDR_ANY);
+    serv.sin_addr.s_addr = INADDR_ANY;
     serv.sin_port = htons(atoi(argv[1]));   
 
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
 
     clientList = initClientList();
 
-    printf("Servidor ouvindo na porta: %s\n", argv[ 1 ] );
+    printf("Servidor ouvindo em %s : %s\n", getMyLocalIP(), argv[1] );
 
     pthread_t * threadClient = NULL;
     int countClients = 0;
