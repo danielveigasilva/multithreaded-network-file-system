@@ -116,8 +116,39 @@ void removeFileName(FileNameList * list, char * name){
             
             break;
         }
+
         fileNameAnt = fileName;
         fileName = fileName->nextFileName;
+    }
+}
+
+void removeClient(ClientList * list, int idClient){
+    
+    Client * client = list->firstClient;
+    Client * clientAnt = NULL;
+
+    while (client != NULL){
+        if (client->idClient == idClient){
+
+            if (list->firstClient == client)
+                list->firstClient = client->nextClient;
+            
+            if (list->lastClient == client){
+                list->lastClient = clientAnt;
+                if (list->lastClient != NULL)
+                    list->lastClient->nextClient = client->nextClient;
+            }
+            
+            if (clientAnt != NULL)
+                clientAnt->nextClient = client->nextClient;
+            
+            list->nClients--;
+            
+            break;
+        }
+
+        clientAnt = client;
+        client = client->nextClient;
     }
 }
 
@@ -218,6 +249,13 @@ void addFileNameFromClient(ClientList * clientList , int socket){
     addFileNameIntoFileNameList(client->FileNameList, fileName);
 }
 
+void deleteClient(ClientList * clientList , int socket){
+    int idClient = recvInt(socket);
+    removeClient(clientList, idClient);
+    close(socket);
+    printf(">> Cliente %d - Desconectado.\n", idClient);
+}
+
 void * processCommandsFromClient(void * arg){
 
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
@@ -255,9 +293,10 @@ void * processCommandsFromClient(void * arg){
             case ADD_FILE_CLIENT_COMMAND:
                 addFileNameFromClient(clientList, clientSocket);
                 break;
-
-            default:
-                printf("ATENCAO: Comando inválido\n");
+            
+            case DELETE_CLIENT_COMMAND:
+                deleteClient(clientList, clientSocket);
+                return (void*) 0;
                 break;
         }
     }

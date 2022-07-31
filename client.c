@@ -52,6 +52,8 @@ int mapCommand(char* command){
         return DELETE_FILE_CLIENT_COMMAND;
     if (!strcmp(command, "get"))
         return GET_FILE_COMMAND;
+    if (!strcmp(command, "exit"))
+        return DELETE_CLIENT_COMMAND;
     return -1;
 }
 
@@ -248,26 +250,43 @@ void getClientInfo(int socket){
 }
 
 void deleteFileClient(int socket){
-    char fileName [MAXRCVLEN];
-    scanf("%s", fileName);
 
-    //Obtem dados do cliente com o arquivo
-    sendInt(GET_CLIENT_CONECT_COMMAND, socket);
-    sendString(fileName, socket);
-    Client * client = recvClientInfo(socket);
+    char delimiter = ' ';
+    int nFiles = 0;
+    char ** files = NULL;
 
-    if (client == NULL)
-        printf(" FALHA: Arquivo não localizado.\n");
-    else {
-        //Conecta ao server do cliente
-        int socketServerClient = conectSocketServer(client->port, client->ip);
-        
-        //Solicita delete arquivo
-        sendInt(DELETE_FILE_CLIENT_COMMAND, socketServerClient);
-        sendString(fileName, socketServerClient);
+    //Obtem lista de arquivos desejados
+    while (delimiter != '\n'){
 
-        close(socketServerClient);
-    }  
+        files = (char**) realloc(files, (nFiles + 1) * sizeof(char*));
+        files[nFiles] = (char*) calloc((MAXRCVLEN + 1), sizeof(char));
+
+        scanf("%s", files[nFiles]);
+        delimiter = getchar();
+        nFiles++;
+    }
+
+    for (int i = 0; i < nFiles; i++){
+
+        //Obtem dados do cliente com o arquivo
+        sendInt(GET_CLIENT_CONECT_COMMAND, socket);
+        sendString(files[i], socket);
+        Client * client = recvClientInfo(socket);
+
+        if (client == NULL)
+            printf(" FALHA: Arquivo %s não localizado.\n", files[i]);
+        else {
+            //Conecta ao server do cliente
+            int socketServerClient = conectSocketServer(client->port, client->ip);
+            
+            //Solicita delete arquivo
+            sendInt(DELETE_FILE_CLIENT_COMMAND, socketServerClient);
+            sendString(files[i], socketServerClient);
+
+            close(socketServerClient);
+        }
+
+    }   
 }
 
 void * getFileClientAndSave(void * _args){
@@ -374,6 +393,11 @@ void getFileClient(int socket, char * directory, int idClient){
     } 
 }
 
+void deleteClient(int socket, int idClient){
+    sendInt(DELETE_CLIENT_COMMAND, socket);
+    sendInt(idClient, socket);
+}
+
 
 
 int main(int argc, char *argv[])
@@ -443,8 +467,14 @@ int main(int argc, char *argv[])
                 deleteFileClient(socketServer);
                 break;
 
-            case GET_FILE_COMMAND:
+            case GET_FILE_COMMAND: //Baixa arquivo
                 getFileClient(socketServer, directory, idClient);
+                break;
+
+            case DELETE_CLIENT_COMMAND: //Desconecta
+                deleteClient(socketServer, idClient);
+                close(socketServer);
+                return EXIT_SUCCESS;
                 break;
         }
         
