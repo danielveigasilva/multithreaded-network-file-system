@@ -18,7 +18,7 @@
 #define STATUS_OK 101
 #define STATUS_NOT_FOUND 404
 
-#define FILE_BLOCK_SIZE 5
+#define FILE_BLOCK_SIZE 100
 
 #define true 1
 #define false 0
