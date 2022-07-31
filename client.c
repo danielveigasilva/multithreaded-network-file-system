@@ -18,6 +18,7 @@
 typedef struct ArgsInitClientServer_t{
     struct sockaddr_in clientServ;  
     int socketServer;
+    int idClient;
     char * directory;
 }ArgsInitClientServer;
 
@@ -25,6 +26,7 @@ typedef struct ArgsInitClientServer_t{
 typedef struct ArgsProcessCommandsFromOtherClient_t{
     int socketClient;
     int socketServer;
+    int idClient;
     char * directory;
 }ArgsProcessCommandsFromOtherClient;
 
@@ -37,21 +39,26 @@ typedef struct ArgsGetFileClientAndSave_t{
     Client * client;
 }ArgsGetFileClientAndSave;
 
+typedef struct ArgsSendFileToClientInThread_t{
+    char * fileName;
+    char * directory;
+    int socketClient;
+    int idClient;
+} ArgsSendFileToClientInThread;
+
 
 
 int mapCommand(char* command){
     if (!strcmp(command, "list"))
         return LIST_COMMAND;
     if (!strcmp(command, "status"))
-        return STATUS_COMMAND;
-    //if (!strcmp(command, "sync"))
-    //    return SEND_CLIENT_INFO_COMMAND;
-    if (!strcmp(command, "info"))
-        return CLIENT_INFO_COMMAND;
+        return GET_STATUS_COMMAND;
     if (!strcmp(command, "rm"))
         return DELETE_FILE_CLIENT_COMMAND;
     if (!strcmp(command, "get"))
         return GET_FILE_COMMAND;
+    if (!strcmp(command, "send"))
+        return SEND_FILE_COMMAND;
     if (!strcmp(command, "exit"))
         return DELETE_CLIENT_COMMAND;
     return -1;
@@ -105,7 +112,7 @@ Client* recvClientInfo(int socket){
     Client * client = calloc(1, sizeof(Client));
 
     int status = recvInt(socket);
-    if (status == 404)
+    if (status == STATUS_NOT_FOUND)
         return NULL;
 
     client->ip = recvString(socket);
@@ -142,11 +149,54 @@ void sendFileClient(char * directory, int socketClient){
     sendFile(pathFile, socketClient);
 }
 
+void recvFileClient(char * directory, int socketClient, int socketServer, int myId){
+    char * fileName = recvString(socketClient);
+    int idClientSend = recvInt(socketClient);
+
+    //Monta modelo de nome de arquivo
+    char modelFileName [MAXRCVLEN];
+    char posfix[] = "_client%d_%d%d%d_%d%d.";
+    int salto = 0;
+    for (int i = 0; i < strlen(fileName); i++){
+        if (fileName[i] == '.'){
+            modelFileName[i] = '\0';
+            strcat(modelFileName, posfix);
+            salto = strlen(posfix) - 1;
+        }
+        else
+            modelFileName[i + salto] = fileName[i];
+    }
+    modelFileName[strlen(fileName) + salto] = '\0';
+
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+
+    char newFileName [MAXRCVLEN];
+    sprintf(newFileName, modelFileName, idClientSend, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min);
+
+    //Montando path file
+    char pathFile[strlen(directory) + strlen(newFileName) + 1];
+    strcpy(pathFile, directory); 
+    strcat(pathFile, newFileName);
+
+    //Recebe arquivo
+    recvFile(pathFile, socketClient);
+    close(socketClient);
+
+    //Atualiza estrutura do server
+    sendInt(ADD_FILE_CLIENT_COMMAND, socketServer);
+    sendInt(myId, socketServer);
+    sendString(newFileName, socketServer);
+
+    printf(" Arquivo %s baixado, nomeado como %s \n", fileName, newFileName);
+}
+
 void * processCommandsFromOtherClient(void * args){
     ArgsProcessCommandsFromOtherClient * argumentos = (ArgsProcessCommandsFromOtherClient*) args; 
     
     int socketClient = argumentos->socketClient;
     int socketServer = argumentos->socketServer;
+    int idClient = argumentos->idClient;
     char * directory = argumentos->directory;
 
     while (true){
@@ -159,6 +209,10 @@ void * processCommandsFromOtherClient(void * args){
             
             case GET_FILE_COMMAND:
                 sendFileClient(directory, socketClient);
+                break;
+            
+            case SEND_FILE_COMMAND:
+                recvFileClient(directory, socketClient, socketServer, idClient);
                 break;
         }
     }
@@ -189,6 +243,7 @@ void * initClientServer(void * args){
         args->directory = directory;
         args->socketClient = clientSocket;
         args->socketServer = socketServer;
+        args->idClient = argumentos->idClient;
         
         threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
         pthread_create(threadClient, NULL, processCommandsFromOtherClient, args);
@@ -230,25 +285,6 @@ int sendClientInfo(int socket, int portClient, char * ipClient, char * directory
     return idClient;
 }
 
-void getClientInfo(int socket){
-    
-    sendInt(CLIENT_INFO_COMMAND, socket);
-
-    int idClient = 0;
-    scanf("%d", &idClient);
-    sendInt(idClient, socket);
-
-    Client * client = recvClientInfo(socket);
-
-    if (client == NULL)
-        printf(" FALHA: Cliente não localizado.\n");
-    else{
-        printf(" Cliente - %d\n", client->idClient);
-        printf("  * IP: %s\n", client->ip);
-        printf("  * PORTA: %d\n", client->port);
-    }  
-}
-
 void deleteFileClient(int socket){
 
     char delimiter = ' ';
@@ -269,7 +305,7 @@ void deleteFileClient(int socket){
     for (int i = 0; i < nFiles; i++){
 
         //Obtem dados do cliente com o arquivo
-        sendInt(GET_CLIENT_CONECT_COMMAND, socket);
+        sendInt(GET_CLIENT_BY_FILE_COMMAND, socket);
         sendString(files[i], socket);
         Client * client = recvClientInfo(socket);
 
@@ -376,7 +412,7 @@ void getFileClient(int socket, char * directory, int idClient){
     for (int i = 0; i < nFiles; i++){
 
         //Obtem dados do cliente com o arquivo
-        sendInt(GET_CLIENT_CONECT_COMMAND, socket);
+        sendInt(GET_CLIENT_BY_FILE_COMMAND, socket);
         sendString(files[i], socket);
         Client * client = recvClientInfo(socket);
 
@@ -396,9 +432,94 @@ void getFileClient(int socket, char * directory, int idClient){
 void deleteClient(int socket, int idClient){
     sendInt(DELETE_CLIENT_COMMAND, socket);
     sendInt(idClient, socket);
+    close(socket);
 }
 
+void getStatus(int socket){
+    sendInt(GET_STATUS_COMMAND, socket);
+    char * status = recvString(socket);
 
+    printf("\n");
+    printf(" Status Server:\n");
+    printf("  %s\n", status);
+    printf("\n");
+}
+
+void * sendFileToClientInThread(void * _args){
+
+    ArgsSendFileToClientInThread * args = (ArgsSendFileToClientInThread *) _args;
+    int socket = args->socketClient;
+    int idClient = args->idClient;
+
+    //Montando path file
+    char * fileName = args->fileName;
+    char * directory = args->directory;
+    char pathFile[strlen(directory) + strlen(fileName) + 1];
+    strcpy(pathFile, directory); 
+    strcat(pathFile, fileName);
+
+    //Envia arquivo
+    if (access(pathFile, F_OK) == 0){
+
+        sendInt(SEND_FILE_COMMAND, socket);
+        sendString(fileName, socket);
+        sendInt(idClient, socket);
+
+        sendFile(pathFile, args->socketClient);
+    }
+    else
+        printf(" FALHA: Arquivo %s não localizado em Client %d\n",fileName, idClient);
+
+    return (void *) 0;
+}
+
+void sendFilesToClient(int socket, char * dir, int myId){
+
+    char delimiter = ' ';
+    int nFiles = 0;
+    char ** files = NULL;
+
+    //Obtem lista de arquivos desejados
+    while (delimiter != '\n'){
+
+        files = (char**) realloc(files, (nFiles + 1) * sizeof(char*));
+        files[nFiles] = (char*) calloc((MAXRCVLEN + 1), sizeof(char));
+
+        scanf("%s", files[nFiles]);
+        delimiter = getchar();
+        nFiles++;
+    }
+
+    int idClientDest = atoi(files[nFiles-1]); // id client destino ultimo argumento
+
+    //Obtem dados do cliente de destino
+    sendInt(GET_CLIENT_BY_ID_COMMAND, socket);
+    sendInt(idClientDest, socket);
+    Client * client = recvClientInfo(socket);
+
+    if (client == NULL)
+        printf(" FALHA: Cliente %d nao localizado.\n", idClientDest);
+    else {
+        for (int i = 0; i < nFiles - 1; i++){
+            
+            int socketMiniServer = conectSocketServer(client->port, client->ip);
+            
+            if (socketMiniServer == -1)
+                printf(" FALHA: não foi possivel se conectar ao Cliente %d.\n", idClientDest);
+            else{
+                 //Criação de thread para tranferencia de arquivos
+                ArgsSendFileToClientInThread * args = (ArgsSendFileToClientInThread *) calloc(1, sizeof(ArgsSendFileToClientInThread));
+                args->fileName = files[i];
+                args->directory = dir;
+                args->socketClient = socketMiniServer;
+                args->idClient = myId;
+
+                pthread_t * threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
+                pthread_create(threadClient, NULL, sendFileToClientInThread, args);   
+            }
+        }
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -436,6 +557,7 @@ int main(int argc, char *argv[])
     args->clientServ = serv;
     args->directory = directory;
     args->socketServer = socketServer;
+    args->idClient = idClient;
 
     pthread_t * threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
     pthread_create(threadClient, NULL, initClientServer, args);
@@ -451,30 +573,33 @@ int main(int argc, char *argv[])
 
         switch (codCommand)
         {
-            case LIST_COMMAND:
+            case LIST_COMMAND: //Lista arquivos disponíveis no server
                 recvFilesNames(socketServer);
                 break;
 
-            case SEND_CLIENT_INFO_COMMAND:
-                sendClientInfo(socketServer, portClient, ipClient, directory);
-                break;
-
-            case CLIENT_INFO_COMMAND:
-                getClientInfo(socketServer);
-                break;
-
-            case DELETE_FILE_CLIENT_COMMAND:
+            case DELETE_FILE_CLIENT_COMMAND: //Solicita delete de arquivos
                 deleteFileClient(socketServer);
                 break;
 
-            case GET_FILE_COMMAND: //Baixa arquivo
+            case GET_FILE_COMMAND: //Baixa arquivos
                 getFileClient(socketServer, directory, idClient);
                 break;
 
-            case DELETE_CLIENT_COMMAND: //Desconecta
+            case GET_STATUS_COMMAND: //Obtem status do server
+                getStatus(socketServer);
+                break;
+
+            case SEND_FILE_COMMAND: //Envia arquivos
+                sendFilesToClient(socketServer, directory, idClient);
+                break;
+
+            case DELETE_CLIENT_COMMAND: //Desconecta do server
                 deleteClient(socketServer, idClient);
-                close(socketServer);
-                return EXIT_SUCCESS;
+                return EXIT_SUCCESS; //Finaliza programa
+                break;
+
+            default:
+                printf("ERRO: Comando '%s' inválido\n", command);
                 break;
         }
         

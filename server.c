@@ -204,12 +204,12 @@ void saveClientInfo(ClientList * clientList, int idClient, int socket){
     printf(">> Cliente %d (%s : %d) - %d arquivos mapeados.\n", client->idClient, client->ip, client->port, client->FileNameList->nFileNames);
 }
 
-void sendClientInfo(ClientList * clientList, int socket){
+void sendClientOfId(ClientList * clientList, int socket){
     int idClient = recvInt(socket);
     Client * client = getClientByIdClient(clientList, idClient);
 
     //Status
-    sendInt(client == NULL ? 404 : 1, socket);
+    sendInt(client == NULL ? STATUS_NOT_FOUND : STATUS_OK, socket);
     
     if (client != NULL){
         sendString(client->ip, socket);
@@ -223,7 +223,7 @@ void sendClientOfFile(ClientList * clientList, int socket){
     Client * client = getClientByFileName(clientList, fileName);
 
     //Status
-    sendInt(client == NULL ? 404 : 1, socket);
+    sendInt(client == NULL ? STATUS_NOT_FOUND : STATUS_OK, socket);
     
     if (client != NULL){
         sendString(client->ip, socket);
@@ -256,6 +256,13 @@ void deleteClient(ClientList * clientList , int socket){
     printf(">> Cliente %d - Desconectado.\n", idClient);
 }
 
+void sendStatus(int socket){
+    char status[500];
+    //TODO: complementar informacoes do status
+    sprintf(status, "Tudo ok...");
+    sendString(status, socket);
+}
+
 void * processCommandsFromClient(void * arg){
 
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
@@ -270,20 +277,20 @@ void * processCommandsFromClient(void * arg){
                 sendFilesNames(clientList, clientSocket);
                 break;
 
-            case STATUS_COMMAND:
-                printf("STATUS_COMMAND\n");
-                break;
-
-            case CLIENT_INFO_COMMAND:
-                sendClientInfo(clientList, clientSocket);
+            case GET_STATUS_COMMAND:
+                sendStatus(clientSocket);
                 break;
             
             case SEND_CLIENT_INFO_COMMAND:
                 saveClientInfo(clientList, idClient, clientSocket);
                 break;
             
-            case GET_CLIENT_CONECT_COMMAND:
+            case GET_CLIENT_BY_FILE_COMMAND:
                 sendClientOfFile(clientList, clientSocket);
+                break;
+
+            case GET_CLIENT_BY_ID_COMMAND:
+                sendClientOfId(clientList, clientSocket);
                 break;
 
             case DELETE_FILE_CLIENT_COMMAND:
@@ -296,7 +303,7 @@ void * processCommandsFromClient(void * arg){
             
             case DELETE_CLIENT_COMMAND:
                 deleteClient(clientList, clientSocket);
-                return (void*) 0;
+                return (void*) 0; //Mata a thread de conexão com o client deletado
                 break;
         }
     }
