@@ -194,7 +194,8 @@ void saveClientInfo(ClientList * clientList, int idClient, char * ipClient, int 
     client->nextClient = NULL;
 
     client->port = recvInt(socket);
-    client->ip = ipClient;
+    client->ip = (char*) calloc(sizeof(ipClient), sizeof(char));
+    strcpy(client->ip, ipClient);
     client->FileNameList = recvClientFileNames(socket);
 
     addClientIntoClientList(clientList, client);
@@ -275,8 +276,6 @@ void * processCommandsFromClient(void * arg){
 
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
     int clientSocket = argumentos->socket;
-    int idClient = argumentos->idClient;
-    char * ipClient = argumentos->ipClient;
 
     while (true){
         int command = recvInt(clientSocket);
@@ -291,7 +290,7 @@ void * processCommandsFromClient(void * arg){
                 break;
             
             case SEND_CLIENT_INFO_COMMAND:
-                saveClientInfo(clientList, idClient, ipClient, clientSocket);
+                saveClientInfo(clientList, argumentos->idClient, argumentos->ipClient, clientSocket);
                 break;
             
             case GET_CLIENT_BY_FILE_COMMAND:
@@ -349,13 +348,15 @@ int main(int argc, char *argv[])
 
     while(true){
         int clientSocket = accept(serverSocket, (struct sockaddr *)&dest, &socksize);
-        
+        char * ipClient = inet_ntoa(dest.sin_addr);
+
         threadClient = (pthread_t*) calloc(1, sizeof(pthread_t));
-        
+
         ArgsProcessCommandsFromClient * args = (ArgsProcessCommandsFromClient *) calloc(1, sizeof(ArgsProcessCommandsFromClient));
         args->socket = clientSocket;
         args->idClient = countClients;
-        args->ipClient = inet_ntoa(dest.sin_addr);
+        args->ipClient = (char*) calloc(sizeof(ipClient), sizeof(char));
+        strcpy(args->ipClient, ipClient);
 
         pthread_create(threadClient, NULL, processCommandsFromClient, args);
         countClients++;
