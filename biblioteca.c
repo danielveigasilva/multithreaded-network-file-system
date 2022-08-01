@@ -104,14 +104,3 @@ char* recvString( int socket ){
     return value;
 }
 
-char * getMyLocalIP(){
-    char hostName[256];
-  
-    gethostname(hostName, sizeof(hostName));
-    struct hostent *host_entry = gethostbyname(hostName);
-  
-    char *ip = inet_ntoa(*((struct in_addr*)
-                           host_entry->h_addr_list[0]));
-    return ip;
-}
-

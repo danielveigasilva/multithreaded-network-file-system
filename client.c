@@ -95,7 +95,7 @@ void sendClientFileNames(char * directory, int socket){
                 continue;
             
             nameFiles = (char**) realloc(nameFiles, (countFiles + 1) * sizeof(char*));
-            nameFiles[countFiles] = (char*) calloc((entry->d_namlen + 1), sizeof(char));
+            nameFiles[countFiles] = (char*) calloc((sizeof(entry->d_name) + 1), sizeof(char));
             strcpy(nameFiles[countFiles], entry->d_name);
             
             countFiles++;
@@ -108,17 +108,25 @@ void sendClientFileNames(char * directory, int socket){
     }
 } 
 
-Client* recvClientInfo(int socket){
-    Client * client = calloc(1, sizeof(Client));
 
-    int status = recvInt(socket);
-    if (status == STATUS_NOT_FOUND)
-        return NULL;
+Client * recvClient(int socket){
+
+    Client * client = calloc(1, sizeof(Client));
 
     client->ip = recvString(socket);
     client->port = recvInt(socket);
     client->idClient = recvInt(socket);
 
+    return client;
+}
+
+Client* recvClientInfo(int socket){
+    
+    int status = recvInt(socket);
+    if (status == STATUS_NOT_FOUND)
+        return NULL;
+
+    Client * client = recvClient(socket);
     return client;
 }
 
@@ -274,11 +282,10 @@ void recvFilesNames(int socket){
     }
 }
 
-int sendClientInfo(int socket, int portClient, char * ipClient, char * directory){
+int sendClientInfo(int socket, int portClient, char * directory){
     sendInt(SEND_CLIENT_INFO_COMMAND, socket);
     
     sendInt(portClient, socket);
-    sendString(ipClient, socket);
     sendClientFileNames(directory, socket);
 
     int idClient = recvInt(socket);
@@ -437,11 +444,14 @@ void deleteClient(int socket, int idClient){
 
 void getStatus(int socket){
     sendInt(GET_STATUS_COMMAND, socket);
-    char * status = recvString(socket);
+    int nClients = recvInt(socket);
 
-    printf("\n");
-    printf(" Status Server:\n");
-    printf("  %s\n", status);
+    for (int i = 0; i < nClients; i++){
+        Client * client = recvClient(socket);
+        printf("\n");
+        printf(" Cliente - %d\n", client->idClient);
+        printf("  # %s:%d\n", client->ip, client->port);
+    }
     printf("\n");
 }
 
@@ -545,12 +555,11 @@ int main(int argc, char *argv[])
     struct sockaddr_in serv;
     memset(&serv, 0, sizeof(serv));             
     serv.sin_family = AF_INET;                 
-    serv.sin_addr.s_addr = INADDR_ANY;
+    serv.sin_addr.s_addr = htonl(INADDR_ANY);
     serv.sin_port = htons(portClient);
 
     //Realizando sincronização de arquivos disponíveis
-    char * ipClient = getMyLocalIP();
-    int idClient = sendClientInfo(socketServer, portClient, ipClient, directory);
+    int idClient = sendClientInfo(socketServer, portClient, directory);
 
     //Criação de thread para mini-servidor
     ArgsInitClientServer * args = (ArgsInitClientServer *) calloc(1, sizeof(ArgsInitClientServer));

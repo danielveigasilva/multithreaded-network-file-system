@@ -14,6 +14,7 @@
 typedef struct ArgsProcessCommandsFromClient_t{
     int socket;
     int idClient;   
+    char * ipClient;
 }ArgsProcessCommandsFromClient;
 
 ClientList * clientList;
@@ -186,14 +187,14 @@ void sendFilesNames(ClientList * clientList, int socket){
     
 }
 
-void saveClientInfo(ClientList * clientList, int idClient, int socket){
+void saveClientInfo(ClientList * clientList, int idClient, char * ipClient, int socket){
     
     Client * client = calloc(1, sizeof(Client));
     client->idClient = idClient;
     client->nextClient = NULL;
 
     client->port = recvInt(socket);
-    client->ip = recvString(socket);
+    client->ip = ipClient;
     client->FileNameList = recvClientFileNames(socket);
 
     addClientIntoClientList(clientList, client);
@@ -204,6 +205,12 @@ void saveClientInfo(ClientList * clientList, int idClient, int socket){
     printf(">> Cliente %d (%s : %d) - %d arquivos mapeados.\n", client->idClient, client->ip, client->port, client->FileNameList->nFileNames);
 }
 
+void sendClient(Client * client, int socket){
+    sendString(client->ip, socket);
+    sendInt(client->port, socket);
+    sendInt(client->idClient, socket);
+}
+
 void sendClientOfId(ClientList * clientList, int socket){
     int idClient = recvInt(socket);
     Client * client = getClientByIdClient(clientList, idClient);
@@ -211,11 +218,8 @@ void sendClientOfId(ClientList * clientList, int socket){
     //Status
     sendInt(client == NULL ? STATUS_NOT_FOUND : STATUS_OK, socket);
     
-    if (client != NULL){
-        sendString(client->ip, socket);
-        sendInt(client->port, socket);
-        sendInt(client->idClient, socket);
-    }
+    if (client != NULL)
+        sendClient(client, socket);
 }
 
 void sendClientOfFile(ClientList * clientList, int socket){
@@ -225,11 +229,8 @@ void sendClientOfFile(ClientList * clientList, int socket){
     //Status
     sendInt(client == NULL ? STATUS_NOT_FOUND : STATUS_OK, socket);
     
-    if (client != NULL){
-        sendString(client->ip, socket);
-        sendInt(client->port, socket);
-        sendInt(client->idClient, socket);
-    }
+    if (client != NULL)
+        sendClient(client, socket);
 }
 
 void deleteFileNameFromClient(ClientList * clientList, int socket){
@@ -256,11 +257,18 @@ void deleteClient(ClientList * clientList , int socket){
     printf(">> Cliente %d - Desconectado.\n", idClient);
 }
 
-void sendStatus(int socket){
-    char status[500];
-    //TODO: complementar informacoes do status
-    sprintf(status, "Tudo ok...");
-    sendString(status, socket);
+void sendStatus(ClientList * clientList, int socket){
+    
+    Client * clientAux = clientList->firstClient;
+
+    sendInt(clientList->nClients, socket);
+    
+    while(clientAux != NULL){
+    
+        sendClient(clientAux, socket);
+
+        clientAux = clientAux->nextClient;
+    }   
 }
 
 void * processCommandsFromClient(void * arg){
@@ -268,6 +276,7 @@ void * processCommandsFromClient(void * arg){
     ArgsProcessCommandsFromClient *argumentos = (ArgsProcessCommandsFromClient*)arg;
     int clientSocket = argumentos->socket;
     int idClient = argumentos->idClient;
+    char * ipClient = argumentos->ipClient;
 
     while (true){
         int command = recvInt(clientSocket);
@@ -278,11 +287,11 @@ void * processCommandsFromClient(void * arg){
                 break;
 
             case GET_STATUS_COMMAND:
-                sendStatus(clientSocket);
+                sendStatus(clientList, clientSocket);
                 break;
             
             case SEND_CLIENT_INFO_COMMAND:
-                saveClientInfo(clientList, idClient, clientSocket);
+                saveClientInfo(clientList, idClient, ipClient, clientSocket);
                 break;
             
             case GET_CLIENT_BY_FILE_COMMAND:
@@ -323,7 +332,7 @@ int main(int argc, char *argv[])
 
     memset(&serv, 0, sizeof(serv));             
     serv.sin_family = AF_INET;                 
-    serv.sin_addr.s_addr = INADDR_ANY;
+    serv.sin_addr.s_addr = htonl(INADDR_ANY);
     serv.sin_port = htons(atoi(argv[1]));   
 
     int serverSocket = socket(AF_INET, SOCK_STREAM, 0);
@@ -333,7 +342,7 @@ int main(int argc, char *argv[])
 
     clientList = initClientList();
 
-    printf("Servidor ouvindo em %s : %s\n", getMyLocalIP(), argv[1] );
+    printf("Servidor ouvindo em %s : %s\n", inet_ntoa(serv.sin_addr), argv[1] );
 
     pthread_t * threadClient = NULL;
     int countClients = 0;
@@ -346,6 +355,7 @@ int main(int argc, char *argv[])
         ArgsProcessCommandsFromClient * args = (ArgsProcessCommandsFromClient *) calloc(1, sizeof(ArgsProcessCommandsFromClient));
         args->socket = clientSocket;
         args->idClient = countClients;
+        args->ipClient = inet_ntoa(dest.sin_addr);
 
         pthread_create(threadClient, NULL, processCommandsFromClient, args);
         countClients++;
