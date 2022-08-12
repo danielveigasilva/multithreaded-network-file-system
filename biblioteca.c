@@ -45,7 +45,7 @@ void sendFile( char * pathFile, int socket ){
     int blockSize = nBlocks == 1 ? lastBlockSize : FILE_BLOCK_SIZE;
     void * bufferBlock = (void *) calloc(blockSize, 1);
 
-    printf("LOG: nBlock = %d | lastBlock = %d | sizeFile = %ld\n", nBlocks, lastBlockSize, fileSize);
+    //printf("LOG: nBlock = %d | lastBlock = %d | sizeFile = %ld\n", nBlocks, lastBlockSize, fileSize);
 
     while (nBlocks > 0){
 
@@ -60,8 +60,8 @@ void sendFile( char * pathFile, int socket ){
             nTotalBytesSendBlock += nBytesSendBlock;
             nBytesToSendBlock -= nBytesSendBlock;
 
-            if (nBytesToSendBlock != 0)
-                printf("LOG: Reenviando .... enviei bloco %d | size %d\n", nBlocks, blockSize);
+            //if (nBytesToSendBlock != 0)
+            //    printf("LOG: Reenviando .... enviei bloco %d | size %d\n", nBlocks, blockSize);
         }
 
         //Prepara ultimo bloco
@@ -76,7 +76,7 @@ void sendFile( char * pathFile, int socket ){
     fclose(file);    
 }
 
-void recvFile( char * pathNewFile, int socket){
+void recvFile( char * pathNewFile, int socket ){
 
     FILE * file = fopen(pathNewFile, "w");
     int nBlocks = recvInt(socket);
@@ -101,7 +101,7 @@ void recvFile( char * pathNewFile, int socket){
         fwrite(block, 1, blockSize, file);
         free(block);
 
-        printf("LOG: block[%d].size = %d\n", i, blockSize);
+        //printf("LOG: block[%d].size = %d\n", i, blockSize);
     }
 
     fclose(file);
