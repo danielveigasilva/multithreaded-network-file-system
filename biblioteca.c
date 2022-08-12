@@ -35,17 +35,21 @@ void sendFile( char * pathFile, int socket ){
     int nBlocks = ceil((float) fileSize / FILE_BLOCK_SIZE);
     sendInt(nBlocks, socket);
 
+    //Calcula tamanho do ultimo bloco
+    int lastBlockSize = nBlocks == 1 ? fileSize : FILE_BLOCK_SIZE - ((nBlocks * FILE_BLOCK_SIZE) - fileSize);
+    sendInt(lastBlockSize, socket);
+
     //Volta para o inicio do arquivo
     fseek(file, 0L, SEEK_SET);
 
-    int blockSize = nBlocks == 1 ? fileSize : FILE_BLOCK_SIZE;
+    int blockSize = nBlocks == 1 ? lastBlockSize : FILE_BLOCK_SIZE;
     void * bufferBlock = (void *) calloc(blockSize, 1);
 
-    int nTotalBytesSendFile = 0;
+    printf("LOG: nBlock = %d | lastBlock = %d | sizeFile = %ld\n", nBlocks, lastBlockSize, fileSize);
 
-    while (fread(bufferBlock, blockSize, 1, file)){
+    while (nBlocks > 0){
 
-        sendInt(blockSize, socket);
+        fread(bufferBlock, blockSize, 1, file);
 
         int nBytesToSendBlock = blockSize;
         int nTotalBytesSendBlock = 0;
@@ -55,14 +59,17 @@ void sendFile( char * pathFile, int socket ){
             nBytesSendBlock = send(socket, bufferBlock + nTotalBytesSendBlock, nBytesToSendBlock, 0);
             nTotalBytesSendBlock += nBytesSendBlock;
             nBytesToSendBlock -= nBytesSendBlock;
-        }
 
-        nTotalBytesSendFile += nTotalBytesSendBlock;
+            if (nBytesToSendBlock != 0)
+                printf("LOG: Reenviando .... enviei bloco %d | size %d\n", nBlocks, blockSize);
+        }
 
         //Prepara ultimo bloco
         if ((--nBlocks) == 1){
-            blockSize = fileSize - nTotalBytesSendFile;
-            bufferBlock = (void *) realloc(bufferBlock, blockSize);
+            blockSize = lastBlockSize;
+
+            free(bufferBlock);
+            bufferBlock = (void *) calloc(blockSize, 1);
         }
     }
 
@@ -70,16 +77,31 @@ void sendFile( char * pathFile, int socket ){
 }
 
 void recvFile( char * pathNewFile, int socket){
-    
+
     FILE * file = fopen(pathNewFile, "w");
     int nBlocks = recvInt(socket);
+    int lastBlockSize = recvInt(socket);
 
     for (int i = 0; i < nBlocks; i++) {
-        int sizeBlock = recvInt(socket);
-        void * block = (void *) calloc(sizeBlock, 1);
 
-        recv(socket, block, sizeBlock, 0);
-        fwrite(block, 1, sizeBlock, file);
+        int blockSize = i == (nBlocks - 1) ? lastBlockSize : FILE_BLOCK_SIZE;
+        void * block = (void *) calloc(blockSize, 1);
+        
+        int nBytesToRecvBlock = blockSize;
+        int nTotalBytesRecvBlock = 0;
+        int nBytesRecvBlock = 0;
+        
+        while (nBytesToRecvBlock != 0){
+            nBytesRecvBlock = recv(socket, block + nTotalBytesRecvBlock, nBytesToRecvBlock, 0);
+            nTotalBytesRecvBlock += nBytesRecvBlock;
+            nBytesToRecvBlock -= nBytesRecvBlock;
+        }
+
+        //recv(socket, block, blockSize, 0);
+        fwrite(block, 1, blockSize, file);
+        free(block);
+
+        printf("LOG: block[%d].size = %d\n", i, blockSize);
     }
 
     fclose(file);
